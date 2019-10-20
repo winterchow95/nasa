@@ -1,0 +1,570 @@
+<html>
+
+
+<head>
+<title>Nasa App</title>
+
+<style>
+    body{
+        margin: 0;
+    }
+
+    canvas{
+        width: 100%;
+        height: 100%;
+    }
+
+    #score{
+        position: absolute;
+        top: 3%;
+        left: 3%;
+        width: 15%;
+        text-align: left;
+        z-index: 100;
+        display:block;
+        color: red;
+        font-size: 2em;
+    }
+    #currentscore{
+        position: absolute;
+        top: 3%;
+        left: 7%;
+        width: 15%;
+        text-align: left;
+        z-index: 100;
+        display:block;
+        color: red;
+        font-size: 2em;
+    }
+</style>
+
+</head>
+
+<body>
+  <div id="score">Score: &nbsp;&nbsp;&nbsp;<p id="currentscore" style="display: inline;"></p></div>
+</body>
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+<script src="/nasa/space-app/node_modules/satellite.js/dist/satellite.min.js"></script>
+<script src="/nasa/space-app/three.js"></script>
+<script src="/nasa/space-app/OrbitControls.js"></script>
+<script src="/nasa/space-app/Detector.js"></script>
+<script src="/nasa/space-app/THREEx.KeyboardState.js"></script>
+<script src="/nasa/space-app/fly.js"></script>
+<script src="/nasa/space-app/fullScreen.js"></script>
+<script src="/nasa/space-app/windowResize.js"></script>
+<script type="module">
+
+//import * as THREE from '../js/three.module.js';
+
+import { EffectComposer } from '../js/postprocessing/EffectComposer.js';
+import { RenderPass } from '../js/postprocessing/RenderPass.js';
+import { FilmPass } from '../js/postprocessing/FilmPass.js';
+
+var startTime = Date.now(); 
+var sphere = [], pos = [], counter = 0;
+var geometry, material, num = 0, extra1 = 0, extra2 = 30, extra3 = 60, extra4 = 90, extra5 = 120, extra6 = 150, extra7 = 180, extra8 = 210, extra9 = 240, extra10 = 270;
+var radius = 6371;
+var tilt = 0.41;
+var rotationSpeed = 0.02;
+var cloudsScale = 1.005;
+var earthgeometry, meshPlanet, meshClouds;
+var dirLight;
+var composer;
+var textureLoader = new THREE.TextureLoader();
+var d, dPlanet = new THREE.Vector3();
+var clock = new THREE.Clock();
+var controls, player1, player2;
+var keyboard = new THREEx.KeyboardState();
+var MovingCone,drone;
+var collidableMeshList = [];
+var score = 0;
+$("#currentscore").html(score);
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 20000);
+    var renderer = new THREE.WebGLRenderer();
+
+
+        scene = new THREE.Scene();
+				scene.fog = new THREE.FogExp2( 0x000000, 0.00000025 );
+
+				dirLight = new THREE.DirectionalLight( 0xffffff );
+				dirLight.position.set( - 1, 0, 1 ).normalize();
+				scene.add( dirLight );
+
+				var materialNormalMap = new THREE.MeshPhongMaterial( {
+
+					specular: 0x333333,
+					shininess: 15,
+					map: textureLoader.load( "/nasa/space-app/earth/img/earth_atmos_2048.jpg" ),
+					specularMap: textureLoader.load( "/nasa/space-app/earth/img/earth_specular_2048.jpg" ),
+					normalMap: textureLoader.load( "/nasa/space-app/earth/img/earth_normal_2048.jpg" ),
+					normalScale: new THREE.Vector2( 0.85, 0.85 )
+
+				} );
+
+        earthgeometry = new THREE.SphereBufferGeometry( radius, 100, 50 );
+
+        meshPlanet = new THREE.Mesh( earthgeometry, materialNormalMap );
+        meshPlanet.rotation.y = 0;
+        meshPlanet.rotation.z = tilt;
+        scene.add( meshPlanet );
+
+        var materialClouds = new THREE.MeshLambertMaterial( {
+
+        map: textureLoader.load( "/nasa/space-app/earth/img/earth_clouds_1024.png" ),
+        transparent: true
+
+        } );
+
+        meshClouds = new THREE.Mesh( earthgeometry, materialClouds );
+        meshClouds.scale.set( cloudsScale, cloudsScale, cloudsScale );
+        meshClouds.rotation.z = tilt;
+        scene.add( meshClouds );
+	      //player2 = new player();	
+        
+class player{
+
+constructor(){
+
+//random colours
+let letters = '0123456789ABCDEF';
+let colour = '0x';
+for (let i = 0; i < 6; i++) {
+  colour += letters[Math.floor(Math.random() * 16)];
+}
+//console.log(colour);
+
+//random position
+var position = Math.floor(Math.random() * 300);
+
+var MovingConeMat = new THREE.MeshBasicMaterial({color: eval(colour)});
+var MovingConeGeom = new THREE.ConeGeometry( 150,200,320);
+MovingCone = new THREE.Mesh( MovingConeGeom, MovingConeMat );
+MovingCone.position.set(-25, -12000, 0);
+scene.add( MovingCone );
+
+controls                 = new THREE.FlyControls( MovingCone );    // FLY CONTROLS (CAMERA)		
+controls.movementSpeed   = 1500;
+controls.domElement      = document.body;
+controls.rollSpeed       = 0.5;
+controls.autoForward     = false;
+controls.dragToLook      = false;
+
+}
+
+
+
+update()
+{
+  var delta = clock.getDelta(); // seconds.
+  controls.update( delta );
+
+  var relativeCameraOffset = new THREE.Vector3(0,20,500);	
+  var cameraOffset = relativeCameraOffset.applyMatrix4( MovingCone.matrixWorld );
+  camera.position.x = cameraOffset.x;
+  camera.position.y = cameraOffset.y;
+  camera.position.z = cameraOffset.z;
+  camera.lookAt( MovingCone.position );
+
+   // collision detection:
+  //   determines if any of the rays from the cube's origin to each vertex
+  //    intersects any face of a mesh in the array of target meshes
+  //   for increased collision accuracy, add more vertices to the cube;
+  //    for example, new THREE.CubeGeometry( 64, 64, 64, 8, 8, 8, wireMaterial )
+  //   HOWEVER: when the origin of the ray is within the target mesh, collisions do not occur
+//  var originPoint = MovingCone.position.clone();
+  
+
+//   for (let vertexIndex = 0; vertexIndex < MovingCone.geometry.vertices.length; vertexIndex++) {
+ 
+//     var localVertex = MovingCone.geometry.vertices[vertexIndex].clone();
+//     var globalVertex = localVertex.applyMatrix4( MovingCone.matrix );
+//     var directionVector = globalVertex.sub( MovingCone.position );
+    
+//     var ray = new THREE.Raycaster( originPoint, directionVector.clone().normalize() );
+//     var collisionResults = ray.intersectObjects( sphere );
+
+//     if ( collisionResults.length > 0 && collisionResults[0].distance < directionVector.length() ){
+// //       for (let i = 0; i < Object.keys(pos).length; i++) {
+//          console.log(sphere);
+//          console.log(collisionResults[0].object.userData);
+// //       if (sphere[i].userData == collisionResults[0].object.userData) {
+// //            scene.remove(sphere)
+// // }
+
+//        }
+    
+//   }
+
+
+//     }
+
+}			
+}
+
+
+    player1 = new player();
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    var renderModel = new RenderPass( scene, camera );
+				var effectFilm = new FilmPass( 0.35, 0.75, 2048, false );
+
+				composer = new EffectComposer( renderer );
+
+				composer.addPass( renderModel );
+				composer.addPass( effectFilm );
+
+    window.addEventListener( 'resize', function(){
+        var rewidth = window.innerWidth;
+        var reheight = window.innerHeight;
+        renderer.setSize(rewidth, reheight);
+        camera.aspect = rewidth / reheight;
+        camera.updateProjectionMatrix();
+    });
+
+    //var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    scene.add(camera);
+    camera.position.set(0, 8000, 12000);
+	  camera.lookAt(scene.position);
+	  THREEx.WindowResize(renderer, camera);
+	  THREEx.FullScreen.bindKey({ charCode : 'm'.charCodeAt(0) });
+   // controls.maxDistance = 30000;
+
+        var imagePrefix = "background-";
+        var directions  = ["ft", "bk", "up", "dn", "rt", "lf"];
+        var imageSuffix = ".png";
+        var skyGeometry = new THREE.CubeGeometry( 30000, 30000, 30000 );	
+        
+        var materialArray = [];
+            for (var i = 0; i < 6; i++)
+                materialArray.push( new THREE.MeshBasicMaterial({
+                map: THREE.ImageUtils.loadTexture("/nasa/space-app/" + imagePrefix + directions[i] + imageSuffix ),
+                side: THREE.BackSide
+            }));
+        var skyMaterial = new THREE.MeshFaceMaterial( materialArray );
+        var skyBox = new THREE.Mesh( skyGeometry, skyMaterial );
+        scene.add( skyBox );
+
+    var update = function(){
+
+  //  if (Object.keys(pos).length != 0) {
+                            sphere[num].position.x = pos[num].coord[(Object.keys(pos[num].coord).length - pos[num].coordcount)].x;
+                            sphere[num].position.y = pos[num].coord[(Object.keys(pos[num].coord).length - pos[num].coordcount)].y;
+                            sphere[num].position.z = pos[num].coord[(Object.keys(pos[num].coord).length - pos[num].coordcount)].z;
+
+
+
+                           pos[num].coordcount--;
+                           if(pos[num].coordcount == 0){
+                               pos[num].coordcount = Object.keys(pos[num].coord).length;
+                           }
+                           if(num == (Object.keys(pos).length -1)){
+                             console.log();
+                               num = -1;
+                           }
+                            num++;
+
+
+
+                  if((sphere[extra1].position.x <= (MovingCone.position.x + 75)) && (sphere[extra1].position.x >= (MovingCone.position.x - 75))){
+                    console.log("1 x touch");
+                    if((sphere[extra1].position.y <= (MovingCone.position.y + 100)) && (sphere[extra1].position.y >= (MovingCone.position.y - 100))){
+                     console.log("1 y touch");
+                     scene.remove(sphere[extra1]);
+                     score++;
+                     console.log(score);
+                     $('#currentscore').html(score);
+                     if((sphere[extra1].position.z <= (MovingCone.position.z + 160)) && (sphere[extra1].position.x >= (MovingCone.position.z - 160))){
+                        console.log("1 z touch");      
+                        scene.remove(sphere[extra1]);  
+                        score++;
+                        $('#currentscore').html(score);              
+                      }
+                    }
+                  }
+                  extra1++;
+                  if(extra1 == 30){
+                    extra1 = 0;
+                  }
+                  if((sphere[extra2].position.x <= (MovingCone.position.x + 75)) && (sphere[extra2].position.x >= (MovingCone.position.x - 75))){
+                    console.log("2 x touch");
+                    if((sphere[extra2].position.y <= (MovingCone.position.y + 100)) && (sphere[extra2].position.y >= (MovingCone.position.y - 100))){
+                     console.log("2 y touch");
+                     scene.remove(sphere[extra2]);
+                     score ++;
+                     $('#currentscore').html(score);
+                     if((sphere[extra2].position.z <= (MovingCone.position.z + 160)) && (sphere[extra2].position.x >= (MovingCone.position.z - 160))){
+                        console.log("2 z touch");    
+                        scene.remove(sphere[extra2]);
+                        score ++; 
+                        $('#currentscore').html(score);                         
+                      }
+                    }
+                  }
+                  extra2++;
+                  if(extra2 == 60){
+                    extra2 = 30;
+                  }
+                  if((sphere[extra3].position.x <= (MovingCone.position.x + 75)) && (sphere[extra3].position.x >= (MovingCone.position.x - 75))){
+                    console.log("3 x touch");
+                    if((sphere[extra3].position.y <= (MovingCone.position.y + 100)) && (sphere[extra3].position.y >= (MovingCone.position.y - 100))){
+                     console.log("3 y touch");
+                     scene.remove(sphere[extra3]);
+                     score ++;  
+                     $('#currentscore').html(score);
+                     if((sphere[extra3].position.z <= (MovingCone.position.z + 160)) && (sphere[extra3].position.x >= (MovingCone.position.z - 160))){
+                        console.log("3 z touch");       
+                        scene.remove(sphere[extra3]);
+                        score ++; 
+                        $('#currentscore').html(score);                   
+                      }
+                    }
+                  }
+                  extra3++;
+                  if(extra3 == 90){
+                    extra3 = 60;
+                  }
+                  if((sphere[extra4].position.x <= (MovingCone.position.x + 75)) && (sphere[extra4].position.x >= (MovingCone.position.x - 75))){
+                    console.log("4 x touch");
+                    if((sphere[extra4].position.y <= (MovingCone.position.y + 100)) && (sphere[extra4].position.y >= (MovingCone.position.y - 100))){
+                     console.log("4 y touch");
+                     scene.remove(sphere[extra4]);
+                     score ++;
+                     $('#currentscore').html(score);                   
+                     if((sphere[extra4].position.z <= (MovingCone.position.z + 160)) && (sphere[extra4].position.x >= (MovingCone.position.z - 160))){
+                        console.log("4 z touch");           
+                        scene.remove(sphere[extra4]);
+                        score ++; 
+                        $('#currentscore').html(score);                   
+                      }
+                    }
+                  }
+                  extra4++;
+                  if(extra4 == 120){
+                    extra4 = 90;
+                  }
+                  if((sphere[extra5].position.x <= (MovingCone.position.x + 75)) && (sphere[extra5].position.x >= (MovingCone.position.x - 75))){
+                    console.log("5 x touch");
+                    if((sphere[extra5].position.y <= (MovingCone.position.y + 100)) && (sphere[extra5].position.y >= (MovingCone.position.y - 100))){
+                     console.log("5 y touch");
+                     scene.remove(sphere[extra5]);
+                     score ++;
+                     $('#currentscore').html(score);                   
+                     if((sphere[extra5].position.z <= (MovingCone.position.z + 160)) && (sphere[extra5].position.x >= (MovingCone.position.z - 160))){
+                        console.log("5 z touch");  
+                        scene.remove(sphere[extra5]);
+                        score ++;
+                        $('#currentscore').html(score);                   
+                      }
+                    }
+                  }
+                  extra5++;
+                  if(extra5 == 150){
+                    extra5 = 120;
+                  }
+                  if((sphere[extra6].position.x <= (MovingCone.position.x + 75)) && (sphere[extra6].position.x >= (MovingCone.position.x - 75))){
+                    console.log("6 x touch");
+                    if((sphere[extra6].position.y <= (MovingCone.position.y + 100)) && (sphere[extra6].position.y >= (MovingCone.position.y - 100))){
+                     console.log("6 y touch");
+                     scene.remove(sphere[extra6]);
+                     score ++;  
+                     $('#currentscore').html(score);                   
+                     if((sphere[extra6].position.z <= (MovingCone.position.z + 160)) && (sphere[extra6].position.x >= (MovingCone.position.z - 160))){
+                        console.log("6 z touch");      
+                        scene.remove(sphere[extra6]);
+                        score ++;  
+                        $('#currentscore').html(score);                   
+                      }
+                    }
+                  }
+                  extra6++;
+                  if(extra6 == 180){
+                    extra6 = 150;
+                  }
+                  if((sphere[extra7].position.x <= (MovingCone.position.x + 75)) && (sphere[extra7].position.x >= (MovingCone.position.x - 75))){
+                    console.log("7 x touch");
+                    if((sphere[extra7].position.y <= (MovingCone.position.y + 100)) && (sphere[extra7].position.y >= (MovingCone.position.y - 100))){
+                     console.log("7 y touch");
+                     scene.remove(sphere[extra7]);
+                     score ++;  
+                     $('#currentscore').html(score);
+                     if((sphere[extra7].position.z <= (MovingCone.position.z + 160)) && (sphere[extra7].position.x >= (MovingCone.position.z - 160))){
+                        console.log("7 z touch");    
+                        scene.remove(sphere[extra7]);
+                        score ++;
+                        $('#currentscore').html(score);                         
+                      }
+                    }
+                  }
+                  extra7++;
+                  if(extra7 == 210){
+                    extra7 = 180;
+                  }
+                  if((sphere[extra8].position.x <= (MovingCone.position.x + 75)) && (sphere[extra8].position.x >= (MovingCone.position.x - 75))){
+                    console.log("8 x touch");
+                    if((sphere[extra8].position.y <= (MovingCone.position.y + 100)) && (sphere[extra8].position.y >= (MovingCone.position.y - 100))){
+                     console.log("8 y touch");
+                     scene.remove(sphere[extra8]);
+                     score ++;  
+                     $('#currentscore').html(score);
+                     if((sphere[extra8].position.z <= (MovingCone.position.z + 160)) && (sphere[extra8].position.x >= (MovingCone.position.z - 160))){
+                        console.log("8 z touch");       
+                        scene.remove(sphere[extra8]);
+                        score ++; 
+                        $('#currentscore').html(score);                    
+                      }
+                    }
+                  }
+                  extra8++;
+                  if(extra8 == 240){
+                    extra8 = 210;
+                  }
+                  if((sphere[extra9].position.x <= (MovingCone.position.x + 75)) && (sphere[extra9].position.x >= (MovingCone.position.x - 75))){
+                    console.log("9 x touch");
+                    if((sphere[extra9].position.y <= (MovingCone.position.y + 100)) && (sphere[extra9].position.y >= (MovingCone.position.y - 100))){
+                     console.log("9 y touch");
+                     scene.remove(sphere[extra9]);
+                     score ++; 
+                     $('#currentscore').html(score); 
+                     if((sphere[extra9].position.z <= (MovingCone.position.z + 160)) && (sphere[extra9].position.x >= (MovingCone.position.z - 160))){
+                        console.log("9 z touch");           
+                        scene.remove(sphere[extra9]);
+                        score ++; 
+                        $('#currentscore').html(score);                 
+                      }
+                    }
+                  }
+                  extra9++;
+                  if(extra9 == 270){
+                    extra9 = 240;
+                  }
+                  if((sphere[extra10].position.x <= (MovingCone.position.x + 75)) && (sphere[extra10].position.x >= (MovingCone.position.x - 75))){
+                    console.log("10 x touch");
+                    if((sphere[extra10].position.y <= (MovingCone.position.y + 100)) && (sphere[extra10].position.y >= (MovingCone.position.y - 100))){
+                     console.log("10 y touch");
+                     scene.remove(sphere[extra10]);
+                     score ++; 
+                     $('#currentscore').html(score); 
+                     if((sphere[extra10].position.z <= (MovingCone.position.z + 160)) && (sphere[extra10].position.x >= (MovingCone.position.z - 160))){
+                        console.log("10 z touch");  
+                        scene.remove(sphere[extra10]);
+                        score ++;
+                        $('#currentscore').html(score);                            
+                      }
+                    }
+                  }
+                  extra10++;
+                  if(extra10 == 300){
+                    extra10 = 270;
+                  }
+  //          scene.remove(sphere[num]);
+  //             sphere.splice(num, 1);
+  //            pos.splice(num, 1);
+  //            console.log(Object.keys(pos).length);
+  // }      
+            // console.log(pos[num].coord[(Object.keys(pos[num].coord).length - pos[num].coordcount)].x);
+            player1.update();	
+			    //player2.update();
+  
+            //console.log(pos);                 
+ };
+
+var render = function(){
+    renderer.render(scene, camera);
+
+    var delta = clock.getDelta();
+
+    meshPlanet.rotation.y += rotationSpeed * delta;
+    meshClouds.rotation.y += 1.25 * rotationSpeed * delta;
+    composer.render( delta );
+};
+
+var GameLoop = function(){
+
+    requestAnimationFrame( GameLoop);
+
+
+    update();
+    render();
+};
+
+
+function movement(x,y,z,s,id)
+		{	
+			this.x = x;
+			this.y = y;
+			this.z = z;
+			this.s = s;
+			this.id = id;
+
+			// if("this is player one(html1)"){
+			// 	//player 2 info is retrieved.
+
+			// 	//player 1 pass back info to player 2.
+				// x = MovingCone.position.x;
+				// y = MovingCone.position.y;
+				// z = MovingCone.position.z;
+				// s = 0;
+				// id = MovingCone.uuid;
+				// console.log(x,y,z,s,id);
+				
+
+			//(player2, html2)
+			// }else{
+			// 	//player 1 info is retrieved.
+
+			// 	//player 2 pass back info to player  1
+			// 	//give output: x,y,z,score,id
+			// 	x2 = MovingCone.position.x;
+			// 	y2 = MovingCone.position.y;
+			// 	z2 = MovingCone.position.z;
+			// 	s2 = 0;
+			// 	id2 = MovingCone.position.uuid;
+
+			// }
+			
+
+			
+		}
+
+
+
+//fetch("https://cors-anywhere.herokuapp.com/http://debrisorbit.ddns.net:3001/url")
+fetch("http://ec2-3-1-5-145.ap-southeast-1.compute.amazonaws.com:3000/url")
+.then((rep)=>{
+  rep.json().then((res)=>{
+         
+    console.log(Date.now() - startTime);
+
+            pos = res;
+            console.log(pos);
+ // GameLoop();
+            for (let i = 0; i < Object.keys(pos).length; i++) {
+
+            geometry = new THREE.SphereGeometry(20, 54, 54);
+            material = new THREE.MeshBasicMaterial({color: 0xFF0000, wireframe: false});
+            sphere[i] = new THREE.Mesh(geometry, material);
+            sphere[i].userData = {
+              catid : pos[i].catalogNumber
+            };
+            scene.add(sphere[i]);
+            console.log("miao" + i);
+            console.log(sphere[i].userData);
+            }
+  })
+  .then(()=>{
+    GameLoop();
+    console.log("complete");
+})
+
+})
+
+
+</script>
+
+
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - fly controls - earth</title>
+	</head>
+
+	<body>
+
+
+		<script type="module">
+
+			import * as THREE from '/nasa/space-app/three.module.js';
+			import { EffectComposer } from '/nasa/space-app/EffectComposer.js';
+			import { RenderPass } from '/nasa/space-app/RenderPass.js';
+			import { FilmPass } from '/nasa/space-app/FilmPass.js';
+
+			var radius = 6371;
+			var tilt = 0.41;
+			var rotationSpeed = 0.02;
+
+			var cloudsScale = 1.005;
+
+			var MARGIN = 0;
+			var SCREEN_HEIGHT = window.innerHeight - MARGIN * 2;
+			var SCREEN_WIDTH = window.innerWidth;
+
+			var camera, scene, renderer;
+			var geometry, meshPlanet, meshClouds;
+			var dirLight;
+
+			var composer;
+
+			var textureLoader = new THREE.TextureLoader();
+
+			var d, dPlanet = new THREE.Vector3();
+
+			var clock = new THREE.Clock();
+
+			init();
+			animate();
+
+			function init() {
+
+				camera = new THREE.PerspectiveCamera( 25, SCREEN_WIDTH / SCREEN_HEIGHT, 50, 1e7 );
+				camera.position.z = radius * 5;
+
+				scene = new THREE.Scene();
+				scene.fog = new THREE.FogExp2( 0x000000, 0.00000025 );
+
+				dirLight = new THREE.DirectionalLight( 0xffffff );
+				dirLight.position.set( - 1, 0, 1 ).normalize();
+				scene.add( dirLight );
+
+				var materialNormalMap = new THREE.MeshPhongMaterial( {
+
+					specular: 0x333333,
+					shininess: 15,
+					map: textureLoader.load( "earth_atmos_2048.jpg" ),
+					specularMap: textureLoader.load( "earth_specular_2048.jpg" ),
+					normalMap: textureLoader.load( "earth_normal_2048.jpg" ),
+					normalScale: new THREE.Vector2( 0.85, 0.85 )
+
+				} );
+
+				// planet
+
+				geometry = new THREE.SphereBufferGeometry( radius, 100, 50 );
+
+				meshPlanet = new THREE.Mesh( geometry, materialNormalMap );
+				meshPlanet.rotation.y = 0;
+				meshPlanet.rotation.z = tilt;
+				scene.add( meshPlanet );
+
+				// clouds
+
+				var materialClouds = new THREE.MeshLambertMaterial( {
+
+					map: textureLoader.load( "earth_clouds_1024.png" ),
+					transparent: true
+
+				} );
+
+				meshClouds = new THREE.Mesh( geometry, materialClouds );
+				meshClouds.scale.set( cloudsScale, cloudsScale, cloudsScale );
+				meshClouds.rotation.z = tilt;
+				scene.add( meshClouds );
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+				document.body.appendChild( renderer.domElement );
+
+				// postprocessing
+
+				var renderModel = new RenderPass( scene, camera );
+				var effectFilm = new FilmPass( 0.35, 0.75, 2048, false );
+
+				composer = new EffectComposer( renderer );
+
+				composer.addPass( renderModel );
+				composer.addPass( effectFilm );
+
+			}
+
+			function onWindowResize() {
+
+				SCREEN_HEIGHT = window.innerHeight;
+				SCREEN_WIDTH = window.innerWidth;
+
+				camera.aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+				composer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				render();
+
+			}
+
+			function render() {
+
+				// rotate the planet and clouds
+
+				var delta = clock.getDelta();
+
+				meshPlanet.rotation.y += rotationSpeed * delta;
+				meshClouds.rotation.y += 1.25 * rotationSpeed * delta;
+				composer.render( delta );
+
+			}
+
+		</script>
+	</body>
+</html>

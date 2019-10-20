@@ -1,0 +1,57 @@
+<html>
+
+<body>
+    
+
+</body>
+
+
+<script src="three.js"></script>
+<script src="OrbitControls.js"></script>
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+
+<script>
+var startTime = Date.now();
+var pos = [];
+fetch("https://cors-anywhere.herokuapp.com/http://debrisorbit.ddns.net:3001/url")
+.then((rep)=>{
+  rep.json().then((res)=>{
+         
+    console.log(Date.now() - startTime)
+
+pos = res;
+ console.log(pos);
+ // GameLoop();
+
+ //  for (let i = 0; i < Object.keys(pos).length; i++) {
+
+ //      geometry = new THREE.SphereGeometry(15, 54, 54);
+ //      material = new THREE.MeshBasicMaterial({color: 0x00FFFF, wireframe: false});
+ //      sphere[i] = new THREE.Mesh(geometry, material);
+ //      scene.add(sphere[i]);
+ //     console.log("miao" + i);
+ //   }
+  })
+})
+
+
+// $.ajax({
+//             url: "https://cors-anywhere.herokuapp.com/http://debrisorbit.ddns.net:3001/url",
+//             contentType: "application/json",
+//             dataType: 'json',
+//             success: function (res){
+            
+                
+//             }, 
+//             complete: function(){
+
+//                 // if (i == (posx.length - 1)) {
+//                 //      }
+//                  console.log("complete");
+
+//              }
+//         })
+
+
+</script>
+</html>
